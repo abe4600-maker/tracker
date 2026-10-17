@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>フィジカル＆メンタル管理手帳</title>
+    <!-- グラフ描画用 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --diary-bg: #fdfbf7;         /* 手帳の用紙のようなオフホワイト */
+            --diary-card: #ffffff;       /* カード背景 */
+            --diary-border: #e6e2d8;     /* 落ち着いた枠線色 */
+            --text-main: #2c2925;        /* 濃いチャコール（本文） */
+            --text-sub: #78716c;         /* 控えめなグレー */
+            --primary: #5c4033;          /* 深みのある手帳ブラウン */
+            --primary-hover: #463026;    /* ホバー時のブラウン */
+            --accent: #8b5a2b;           /* シックなアクセント（キャメル） */
+            --danger: #b94a48;           /* 落ち着いた赤 */
+            --success: #3f624e;          /* 落ち着いた緑 */
+            --warning: #b45309;          /* シックなオレンジ */
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+        }
+        body {
+            background-color: var(--diary-bg);
+            color: var(--text-main);
+            padding: 12px;
+            padding-bottom: 80px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 1.2rem;
+            text-align: center;
+            margin-bottom: 16px;
+            color: var(--primary);
+            letter-spacing: 0.1em;
+            font-weight: normal;
+            border-bottom: 1px dashed var(--primary);
+            padding-bottom: 8px;
+        }
+        /* 編集中バナー */
+        #editModeBanner {
+            display: none;
+            background: #fef3c7;
+            border: 1px solid #d97706;
+            color: #92400e;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            text-align: center;
+        }
+        #editModeBanner.active {
+            display: block;
+        }
+        /* タブナビゲーション：手帳のインデックス風 */
+        .tabs {
+            display: flex;
+            background: #f4efea;
+            border-radius: 6px;
+            padding: 4px;
+            margin-bottom: 16px;
+            border: 1px solid var(--diary-border);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 8px 4px;
+            text-align: center;
+            background: none;
+            border: none;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: var(--text-sub);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: var(--primary);
+            color: #ffffff;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        /* カードスタイル：手帳のページ・ノート枠 */
+        .card {
+            background: var(--diary-card);
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1px solid var(--diary-border);
+            box-shadow: 0 1px 3px rgba(44, 41, 37, 0.03);
+        }
+        .card h2 {
+            font-size: 0.95rem;
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--diary-border);
+            padding-bottom: 6px;
+            color: var(--primary);
+            letter-spacing: 0.05em;
+        }
+        .form-group {
+            margin-bottom: 12px;
+        }
+        label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: var(--text-sub);
+        }
+        input[type="date"],
+        input[type="number"],
+        input[type="text"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--diary-border);
+            border-radius: 4px;
+            font-size: 0.95rem;
+            background: #fff;
+            color: var(--text-main);
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        textarea {
+            resize: vertical;
+            height: 60px;
+        }
+        .row {
+            display: flex;
+            gap: 8px;
+        }
+        .row .form-group {
+            flex: 1;
+        }
+        /* タグ選択 */
+        .tag-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .tag-checkbox {
+            display: none;
+        }
+        .tag-label {
+            font-size: 0.75rem;
+            background: #f4efea;
+            border: 1px solid var(--diary-border);
+            padding: 4px 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            user-select: none;
+            color: var(--text-main);
+        }
+        .tag-checkbox:checked + .tag-label {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        /* 運動リスト動く行 */
+        .exercise-row {
+            background: #faf8f5;
+            border: 1px solid var(--diary-border);
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            position: relative;
+        }
+        .remove-exercise-btn {
+            background: #fde8e8;
+            color: var(--danger);
+            border: none;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            float: right;
+        }
+        /* ボタン類 */
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 8px;
+            letter-spacing: 0.05em;
+        }
+        .btn:active {
+            background: var(--primary-hover);
+        }
+        .btn-secondary {
+            background: #78716c;
+            font-size: 0.8rem;
+            padding: 6px 12px;
+            margin-top: 4px;
+            width: auto;
+            display: inline-block;
+            border-radius: 4px;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+        .record-item {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--diary-border);
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .record-info div {
+            margin-bottom: 2px;
+        }
+        .action-btns {
+            display: flex;
+            gap: 4px;
+        }
+        .edit-btn {
+            background: #f0ede6;
+            color: var(--primary);
+            border: 1px solid var(--diary-border);
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .delete-btn {
+            background: #fde8e8;
+            color: var(--danger);
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        .analysis-box {
+            background: #faf8f5;
+            border: 1px solid var(--diary-border);
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+        }
+        .analysis-box h3 {
+            font-size: 0.85rem;
+            color: var(--primary);
+            margin-bottom: 6px;
+        }
+        .goal-card {
+            background: #faf8f5;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            border: 1px solid var(--diary-border);
+        }
+        .goal-card.achieved {
+            background: #f0fdf4;
+            border: 1px solid var(--success);
+        }
+        .goal-card.unachieved {
+            background: #fef2f2;
+            border: 1px solid var(--danger);
+        }
+        .journal-list-item {
+            background: #fff;
+            border: 1px solid var(--diary-border);
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+        .word-badge {
+            display: inline-block;
+            background: #f4efea;
+            color: var(--primary);
+            border: 1px solid var(--diary-border);
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            margin: 2px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Physical & Mental Diary</h1>
+
+    <!-- 編集モード中バナー -->
+    <div id="editModeBanner">
+        ✏️ 過去の記録を編集中です（日付: <span id="editingDateText"></span>）
+        <button onclick="cancelEdit()" style="background:none; border:underline; color:#92400e; cursor:pointer; margin-left:8px; font-weight:bold;">編集をキャンセル</button>
+    </div>
+
+    <!-- タブ切り替え -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('input')">日誌を書く</button>
+        <button class="tab-btn" onclick="switchTab('analytics')">分析・グラフ</button>
+        <button class="tab-btn" onclick="switchTab('goals')">目標管理</button>
+        <button class="tab-btn" onclick="switchTab('history')">履歴一覧</button>
+    </div>
+
+    <!-- ① 記録タブ -->
+    <div id="tab-input" class="tab-content active">
+        <form id="dailyForm" onsubmit="saveRecord(event)">
+            
+            <div class="card">
+                <div class="form-group">
+                    <label>記録日</label>
+                    <input type="date" id="recordDate" required>
+                </div>
+            </div>
+
+            <!-- 基礎データ＆睡眠 -->
+            <div class="card">
+                <h2>1. 基礎＆睡眠</h2>
+                <div class="row">
+                    <div class="form-group">
+                        <label>体重 (kg)</label>
+                        <input type="number" step="0.1" id="weight" placeholder="例: 65.0">
+                    </div>
+                    <div class="form-group">
+                        <label>睡眠時間 (h)</label>
+                        <input type="number" step="0.5" id="sleepHours" placeholder="例: 7.0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>睡眠の質 (1:悪 〜 5:良)</label>
+                    <select id="sleepQuality">
+                        <option value="3">3 - 普通</option>
+                        <option value="5">5 - とても良い</option>
+                        <option value="4">4 - 良い</option>
+                        <option value="2">2 - やや悪い</option>
+                        <option value="1">1 - 悪い</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 食事・嗜好品・ケア -->
+            <div class="card">
+                <h2>2. 食事・嗜好品・ケア</h2>
+                <div class="form-group">
+                    <label>朝食の内容</label>
+                    <input type="text" id="breakfast" placeholder="例: 納豆ご飯、味噌汁">
+                </div>
+                <div class="form-group">
+                    <label>昼食の内容</label>
+                    <input type="text" id="lunch" placeholder="例: 定食、サラダ">
+                </div>
+                <div class="form-group">
+                    <label>夕食の内容</label>
+                    <input type="text" id="dinner" placeholder="例: 焼き魚、ビール">
+                </div>
+                <div class="row" style="margin-top: 12px;">
+                    <div class="form-group">
+                        <label>アルコール</label>
+                        <select id="alcohol">
+                            <option value="無">無</option>
+                            <option value="有">有</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>喫煙本数</label>
+                        <input type="number" id="smokingCount" value="0" min="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>服薬・サプリ・ケア・メモ</label>
+                    <input type="text" id="careMemo" placeholder="例: マルチビタミン、ストレッチ実施">
+                </div>
+            </div>
+
+            <!-- 運動記録 -->
+            <div class="card">
+                <h2>3. 運動・歩数記録</h2>
+                <div class="form-group">
+                    <label>歩数</label>
+                    <input type="number" id="stepsCount" placeholder="例: 8000" min="0">
+                </div>
+                
+                <label style="margin-top: 12px; margin-bottom: 6px; display:block;">運動種目リスト</label>
+                <div id="exerciseListContainer"></div>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="btn btn-secondary" onclick="addExerciseRow()">＋ 運動を追加</button>
+                    <button type="button" class="btn btn-secondary" style="background:var(--primary);" onclick="copyPreviousExercise()">📋 前日の運動をコピー</button>
+                </div>
+            </div>
+
+            <!-- メンタル＆要因分析 -->
+            <div class="card">
+                <h2>4. メンタル＆要因分析</h2>
+                <div class="row">
+                    <div class="form-group">
+                        <label>気分スコア (-2 〜 +2)</label>
+                        <select id="mentalScore">
+                            <option value="0">0 - 平穏・普通</option>
+                            <option value="+1">+1 - 良い・充実</option>
+                            <option value="+2">+2 - かなり良い</option>
+                            <option value="-1">-1 - やや低い・モヤモヤ</option>
+                            <option value="-2">-2 - 低い・不調</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>エネルギー値</label>
+                        <select id="energyLevel">
+                            <option value="普通">普通</option>
+                            <option value="高">高い（活気あり）</option>
+                            <option value="低">低い（無気力）</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>感情タグ（複数選択可）</label>
+                    <div class="tag-group">
+                        <input type="checkbox" id="tag_calm" class="tag-checkbox" value="穏やか"><label for="tag_calm" class="tag-label">穏やか</label>
+                        <input type="checkbox" id="tag_焦り" class="tag-checkbox" value="焦り"><label for="tag_焦り" class="tag-label">焦り</label>
+                        <input type="checkbox" id="tag_イライラ" class="tag-checkbox" value="イライラ"><label for="tag_イライラ" class="tag-label">イライラ</label>
+                        <input type="checkbox" id="tag_不安" class="tag-checkbox" value="不安"><label for="tag_不安" class="tag-label">不安</label>
+                        <input type="checkbox" id="tag_達成感" class="tag-checkbox" value="達成感"><label for="tag_達成感" class="tag-label">達成感</label>
+                        <input type="checkbox" id="tag_モヤモヤ" class="tag-checkbox" value="モヤモヤ"><label for="tag_モヤモヤ" class="tag-label">モヤモヤ</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>要因（トリガー）</label>
+                    <select id="triggerFactor">
+                        <option value="特になし">特になし</option>
+                        <option value="仕事・スケジュール負荷">仕事・スケジュール負荷</option>
+                        <option value="人間関係">人間関係</option>
+                        <option value="睡眠不足">睡眠不足</option>
+                        <option value="身体疲労">身体疲労</option>
+                        <option value="天候・環境">天候・環境</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>【メモの魔力式】Fact（事実）</label>
+                    <textarea id="memoFact" placeholder="今日何があったかフラットに記入"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>【メモの魔力式】Abstraction（要因・気づき）</label>
+                    <textarea id="memoAbstraction" placeholder="なぜその状態になったのかのパターン"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>【メモの魔力式】Action（対策）</label>
+                    <textarea id="memoAction" placeholder="次にどうするか"></textarea>
+                </div>
+            </div>
+
+            <!-- イレギュラー・体調不良モード -->
+            <div class="card" style="border-left: 3px solid var(--danger);">
+                <h2>🚨 イレギュラー・体調不良モード（任意）</h2>
+                <div class="form-group">
+                    <label>ステータス</label>
+                    <select id="irregularStatus">
+                        <option value="通常">通常（異常なし）</option>
+                        <option value="体調不良">体調不良（風邪・発熱など）</option>
+                        <option value="怪我・痛み">怪我・痛み</option>
+                        <option value="強い疲労・寝不足">強い疲労・寝不足</option>
+                        <option value="メンタル急降下">メンタル急降下</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>詳細症状・支障度 (1:軽微 〜 5:重度)</label>
+                    <div class="row">
+                        <input type="text" id="irregularSymptoms" placeholder="症状メモ（頭痛、腹痛など）" style="flex:2;">
+                        <select id="irregularSeverity" style="flex:1;">
+                            <option value="1">支障度 1</option>
+                            <option value="2">支障度 2</option>
+                            <option value="3" selected>支障度 3</option>
+                            <option value="4">支障度 4</option>
+                            <option value="5">支障度 5</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>対応策と結果</label>
+                    <input type="text" id="irregularAction" placeholder="例: 早めに服薬して休養、回復傾向">
+                </div>
+            </div>
+
+            <!-- ジャーナル（一番下） -->
+            <div class="card">
+                <h2>📝 ジャーナル（本日の感想・気になること）</h2>
+                <div class="form-group" style="margin-bottom:0;">
+                    <textarea id="journalText" placeholder="今日感じたこと、気になったこと、アイデアなどを自由に記入してください..." style="height: 100px;"></textarea>
+                </div>
+            </div>
+
+            <button type="submit" class="btn" id="submitBtn">今日の記録を保存する</button>
+        </form>
+    </div>
+
+    <!-- ② 分析・グラフタブ -->
+    <div id="tab-analytics" class="tab-content">
+        <div class="card">
+            <h2>📈 体重推移グラフ</h2>
+            <div style="position: relative; height: 220px;">
+                <canvas id="weightChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🏃‍♂️ 運動の週間集計（今週：日曜〜土曜）</h2>
+            <div class="analysis-box" id="exerciseSummary">
+                データ収集中...
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🧠 メンタル・体調パターン抽出</h2>
+            <div class="analysis-box" id="mentalPatternSummary">
+                データ収集中...
+            </div>
+        </div>
+
+        <!-- ジャーナル分析セクション -->
+        <div class="card">
+            <h2>📝 ジャーナル分析＆一覧</h2>
+            <div class="form-group">
+                <label>表示期間の選択</label>
+                <div class="row">
+                    <input type="date" id="journalStartDate" onchange="renderJournalAnalytics()">
+                    <span style="align-self:center;">〜</span>
+                    <input type="date" id="journalEndDate" onchange="renderJournalAnalytics()">
+                </div>
+            </div>
+
+            <div class="analysis-box">
+                <h3>🔍 頻出ワード分析（上位10個）</h3>
+                <div style="margin-bottom: 8px;">
+                    <button type="button" class="btn-secondary" id="wordModeBtn" onclick="toggleWordAnalysisMode()">全期間のワードを表示</button>
+                </div>
+                <div id="wordRankingContainer">ワード収集中...</div>
+            </div>
+
+            <div class="analysis-box">
+                <h3>📖 期間内のジャーナル一覧</h3>
+                <div id="journalListContainer">データ収集中...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ③ 目標管理タブ -->
+    <div id="tab-goals" class="tab-content">
+        <div class="card">
+            <h2>🎯 目標設定</h2>
+            <div class="form-group">
+                <label>目標体重 (kg 以下)</label>
+                <input type="number" step="0.1" id="goalWeight" placeholder="例: 65.0">
+            </div>
+            <div class="form-group">
+                <label>週の目標運動回数 (回 / 週)</label>
+                <input type="number" id="goalExerciseCount" placeholder="例: 3">
+            </div>
+            <div class="form-group">
+                <label>週の目標運動時間 (分 / 週)</label>
+                <input type="number" id="goalExerciseMinutes" placeholder="例: 150">
+            </div>
+            <div class="form-group">
+                <label>目標睡眠時間 (時間 / 日)</label>
+                <input type="number" step="0.5" id="goalSleepHours" placeholder="例: 7.0">
+            </div>
+            <button type="button" class="btn" onclick="saveGoals()">目標を保存する</button>
+        </div>
+
+        <div class="card">
+            <h2>📊 今週の目標達成状況（日曜〜土曜）</h2>
+            <div id="goalProgressList"></div>
+        </div>
+
+        <div class="card">
+            <h2>📅 今月の目標・実績（1日〜月末）</h2>
+            <div id="monthProgressList"></div>
+        </div>
+    </div>
+
+    <!-- ④ 履歴一覧タブ -->
+    <div id="tab-history" class="tab-content">
+        <div class="card">
+            <h2>過去の記録一覧</h2>
+            <div id="historyList"></div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function getTodayJST() {
+        const now = new Date();
+        const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000) + (now.getTimezoneOffset() * 60 * 1000));
+        return jstDate.toISOString().split('T')[0];
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const today = getTodayJST();
+        document.getElementById('recordDate').value = today;
+
+        const todayObj = new Date(today);
+        const weekAgoObj = new Date(todayObj);
+        weekAgoObj.setDate(weekAgoObj.getDate() - 6);
+        document.getElementById('journalStartDate').value = weekAgoObj.toISOString().split('T')[0];
+        document.getElementById('journalEndDate').value = today;
+
+        loadGoalsToForm();
+        loadRecords();
+        if (document.getElementById('exerciseListContainer').children.length === 0) {
+            addExerciseRow();
+        }
+    });
+
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        
+        if (tabName === 'input') {
+            document.getElementById('tab-input').classList.add('active');
+            document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        } else if (tabName === 'analytics') {
+            document.getElementById('tab-analytics').classList.add('active');
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            renderCharts();
+            renderJournalAnalytics();
+        } else if (tabName === 'goals') {
+            document.getElementById('tab-goals').classList.add('active');
+            document.querySelectorAll('.tab-btn')[2].classList.add('active');
+            renderGoalProgress();
+        } else if (tabName === 'history') {
+            document.getElementById('tab-history').classList.add('active');
+            document.querySelectorAll('.tab-btn')[3].classList.add('active');
+            loadRecords();
+        }
+    }
+
+    function addExerciseRow(type = '', minutes = '', rpe = '') {
+        const container = document.getElementById('exerciseListContainer');
+        const div = document.createElement('div');
+        div.className = 'exercise-row';
+        div.innerHTML = `
+            <button type="button" class="remove-exercise-btn" onclick="this.parentElement.remove()">削除</button>
+            <div class="form-group" style="margin-bottom:6px;">
+                <label>種目名</label>
+                <input type="text" class="ex-type" value="${type}" placeholder="例: 筋トレ、ジョギング">
+            </div>
+            <div class="row">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>時間 (分)</label>
+                    <input type="number" class="ex-minutes" value="${minutes}" placeholder="30" min="0">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>強度 (RPE: 1〜10)</label>
+                    <input type="number" class="ex-rpe" value="${rpe}" placeholder="5" min="1" max="10">
+                </div>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+
+    function copyPreviousExercise() {
+        const currentDate = document.getElementById('recordDate').value;
+        if (!currentDate) return;
+
+        const records = JSON.parse(localStorage.getItem('physical_mental_records') || '[]');
+        records.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        let prevRecord = null;
+        for (let i = records.length - 1; i >= 0; i--) {
+            if (records[i].date < currentDate) {
+                prevRecord = records[i];
+                break;
+            }
+        }
+
+        if (!prevRecord || !prevRecord.exercises || prevRecord.exercises.length === 0) {
+            alert('コピー元の前日データ（運動記録）が見つかりませんでした。');
+            return;
+        }
+
+        const container = document.getElementById('exerciseListContainer');
+        container.innerHTML = '';
+        prevRecord.exercises.forEach(ex => {
+            addExerciseRow(ex.type, ex.minutes, ex.rpe);
+        });
+        alert(`${prevRecord.date} の運動内容をコピーしました！`);
+    }
+
+    function saveGoals() {
+        const goals = {
+            weight: document.getElementById('goalWeight').value,
+            exerciseCount: document.getElementById('goalExerciseCount').value,
+            exerciseMinutes: document.getElementById('goalExerciseMinutes').value,
+            sleepHours: document.getElementById('goalSleepHours').value
+        };
+        localStorage.setItem('physical_mental_goals', JSON.stringify(goals));
+        alert('目標を保存しました！');
+        renderGoalProgress();
+    }
+
+    function loadGoalsToForm() {
+        const goals = JSON.parse(localStorage.getItem('physical_mental_goals') || '{}');
+        if (goals.weight) document.getElementById('goalWeight').value = goals.weight;
+        if (goals.exerciseCount) document.getElementById('goalExerciseCount').value = goals.exerciseCount;
+        if (goals.exerciseMinutes) document.getElementById('goalExerciseMinutes').value = goals.exerciseMinutes;
+        if (goals.sleepHours) document.getElementById('goalSleepHours').value = goals.sleepHours;
+    }
+
+    function getSundayOfWeek(dateString) {
+        const d = new Date(dateString);
+        const day = d.getDay();
+        d.setDate(d.getDate() - day);
+        return d.toISOString().split('T')[0];
+    }
+
+    function renderGoalProgress() {
+        const goals = JSON.parse(localStorage.getItem('physical_mental_goals') || '{}');
+        const records = JSON.parse(localStorage.getItem('physical_mental_records') || '[]');
+        const container = document.getElementById('goalProgressList');
+        const monthContainer = document.getElementById('monthProgressList');
+        
+        if (records.length === 0) {
+            container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-sub);">記録データがありません。</p>';
+            monthContainer.innerHTML = '<p style="font-size:0.85rem; color:var(--text-sub);">記録データがありません。</p>';
+            return;
+        }
+
+        const todayStr = getTodayJST();
+        const currentSundayStr = getSundayOfWeek(todayStr);
+        const sundayDate = new Date(currentSundayStr);
+        const saturdayDate = new Date(sundayDate);
+        saturdayDate.setDate(saturdayDate.getDate() + 6);
+        const currentSaturdayStr = saturdayDate.toISOString().split('T')[0];
+
+        const currentWeekRecords = records.filter(r => r.date >= currentSundayStr && r.date <= currentSaturdayStr);
+        let weekMinutes = 0;
+        let weekCount = 0;
+        currentWeekRecords.forEach(r => {
+            if (r.exercises && r.exercises.length > 0) {
+                let hasEx = false;
+                r.exercises.forEach(ex => {
+                    weekMinutes += parseInt(ex.minutes) || 0;
+                    if (parseInt(ex.minutes) > 0 || ex.type) hasEx = true;
+                });
+                if (hasEx) weekCount++;
+            }
+        });
+
+        const [year, month] = todayStr.split('-');
+        const currentMonthRecords = records.filter(r => r.date.startsWith(`${year}-${month}`));
+        let monthMinutes = 0;
+        let monthCount = 0;
+        currentMonthRecords.forEach(r => {
+            if (r.exercises && r.exercises.length > 0) {
+                let hasEx = false;
+                r.exercises.forEach(ex => {
+                    monthMinutes += parseInt(ex.minutes) || 0;
+                    if (parseInt(ex.minutes) > 0 || ex.type) hasEx = true;
+                });
+                if (hasEx) monthCount++;
+            }
+        });
+
+        const latestRecord = records[records.length - 1];
+
+        let weekHtml = `<p style="font-size:0.75rem; color:var(--text-sub); margin-bottom:8px;">対象期間: ${currentSundayStr} 〜 ${currentSaturdayStr}</p>`;
+
+        if (goals.exerciseCount) {
+            const targetCount = parseInt(goals.exerciseCount);
+            const achieved = weekCount >= targetCount;
+            weekHtml += `
+                <div class="goal-card ${achieved ? 'achieved' : 'unachieved'}">
+                    <strong>今週の運動日数/回数</strong> (目標: ${targetCount}回)<br>
+                    実績: <strong>${weekCount} 回</strong> → ${achieved ? '✅ 達成！' : '⚠️ あと ' + (targetCount - weekCount) + ' 回'}
+                </div>`;
+        }
+
+        if (goals.exerciseMinutes) {
+            const targetMins = parseInt(goals.exerciseMinutes);
+            const achieved = weekMinutes >= targetMins;
+            weekHtml += `
+                <div class="goal-card ${achieved ? 'achieved' : 'unachieved'}">
+                    <strong>今週の運動時間</strong> (目標: ${targetMins}分)<br>
+                    実績: <strong>${weekMinutes} 分</strong> → ${achieved ? '✅ 達成！' : '⚠️ あと ' + (targetMins - weekMinutes) + ' 分'}
+                </div>`;
+        }
+
+        if (weekHtml === `<p style="font-size:0.75rem; color:var(--text-sub); margin-bottom:8px;">対象期間: ${currentSundayStr} 〜 ${currentSaturdayStr}</p>`) {
+            weekHtml += '<p style="font-size:0.85rem; color:var(--text-sub);">週間目標が設定されていません。</p>';
+        }
+        container.innerHTML = weekHtml;
+
+        let monthHtml = `<p style="font-size:0.75rem; color:var(--text-sub); margin-bottom:8px;">対象月: ${year}年${month}月 (1日〜)</p>`;
+        monthHtml += `
+            <div class="goal-card" style="background:#faf8f5;">
+                <strong>今月の運動実績トータル</strong><br>
+                ・運動日数/回数: <strong>${monthCount} 回</strong><br>
+                ・総運動時間: <strong>${monthMinutes} 分</strong><br>
+                ・記録日数: <strong>${currentMonthRecords.length} 日</strong>
+            </div>`;
+        
+        if (goals.weight && latestRecord.weight) {
+            const currentWeight = parseFloat(latestRecord.weight);
+            const achieved = currentWeight <= parseFloat(goals.weight);
+            monthHtml += `
+                <div class="goal-card ${achieved ? 'achieved' : 'unachieved'}">
+                    <strong>体重管理</strong> (目標: ${goals.weight}kg以下)<br>
+                    最新値 (${latestRecord.date}): <strong>${currentWeight} kg</strong> →${achieved ? '✅ 達成中！' : '⚠️ 未達'}
+                </div>`;
+        }
+
+        monthContainer.innerHTML = monthHtml;
+    }
+
+    let isAllPeriodWordMode = false;
+    function toggleWordAnalysisMode() {
+        isAllPeriodWordMode = !isAllPeriodWordMode;
+        const btn = document.getElementById('wordModeBtn');
+        btn.textContent = isAllPeriodWordMode ? '選択期間のワードを表示に戻す' : '全期間のワードを表示';
+        renderJournalAnalytics();
+    }
+
+    function extractWordRanking(journalTexts) {
+        let wordCounts = {};
+        const stopWords = new RegExp('^(の|に|は|を|た|が|で|て|と|し|れ|さ|ある|いる|も|する|から|な|こと|として|ため|これ|それ|あれ|ここ|そこ|あそこ|どの|その|あの|こう|そう|ああ|ほう|う|お|ん|っ|ー|\\.|,|、|。|！|\\?|\\s)+$', 'i');
+
+        journalTexts.forEach(text => {
+            if (!text) return;
+            const cleaned = text.replace(/[0-9!-/:-@[-`{-~。\n、  ]/g, ' ');
+            const words = cleaned.split(' ');
+            
+            words.forEach(w => {
+                w = w.trim();
+                if (w.length >= 2 && !stopWords.test(w)) {
+                    wordCounts[w] = (wordCounts[w] || 0) + 1;
+                }
+            });
+        });
+
+        const sorted = Object.entries(wordCounts).sort((a, b) => b[1] - a[1]);
+        return sorted.slice(0, 10);
+    }
+
+    function renderJournalAnalytics() {
+        const records = JSON.parse(localStorage.getItem('physical_mental_records') || '[]');
+        const startDate = document.getElementById('journalStartDate').value;
+        const endDate = document.getElementById('journalEndDate').value;
+
+        const listContainer = document.getElementById('journalListContainer');
+        const rankingContainer = document.getElementById('wordRankingContainer');
+
+        if (records.length === 0) {
+            listContainer.innerHTML = '<p style="color:var(--text-sub);">記録データがありません。</p>';
+            rankingContainer.innerHTML = '<p style="color:var(--text-sub);">データがありません。</p>';
+            return;
+        }
+
+        const filteredRecords = records.filter(r => {
+            if (!r.journal) return false;
+            if (startDate && r.date < startDate) return false;
+            if (endDate && r.date > endDate) return false;
+            return true;
+        });
+
+        if (filteredRecords.length === 0) {
+            listContainer.innerHTML = '<p style="color:var(--text-sub); font-size:0.85rem;">指定した期間内のジャーナル記録はありません。</p>';
+        } else {
+            let listHtml = '';
+            [...filteredRecords].reverse().forEach(r => {
+                listHtml += `
+                    <div class="journal-list-item">
+                        <strong>${r.date}</strong><br>
+                        <p style="margin-top:4px; white-space: pre-wrap; color:var(--text-main);">${r.journal}</p>
+                    </div>
+                `;
+            });
+            listContainer.innerHTML = listHtml;
+        }
+
+        let targetRecordsForWord = isAllPeriodWordMode ? records : filteredRecords;
+        const allJournals = targetRecordsForWord.map(r => r.journal || '');
+        const topWords = extractWordRanking(allJournals);
+
+        let rankHtml = `<p style="font-size:0.75rem; color:var(--text-sub); margin-bottom:6px;">対象: ${isAllPeriodWordMode ? '全期間' : (startDate + ' 〜 ' + endDate)}</p>`;
+        if (topWords.length === 0) {
+            rankHtml += '<p style="font-size:0.85rem; color:var(--text-sub);">分析できるワードがまだありません。</p>';
+        } else {
+            rankHtml += '<div>';
+            topWords.forEach(([word, count], idx) => {
+                rankHtml += `<span class="word-badge">${idx + 1}. ${word} (${count}回)</span>`;
+            });
+            rankHtml += '</div>';
+        }
+        rankingContainer.innerHTML = rankHtml;
+    }
+
+    function saveRecord(e) {
+        e.preventDefault();
+        const date = document.getElementById('recordDate').value;
+
+        const exercises = [];
+        document.querySelectorAll('.exercise-row').forEach(row => {
+            const type = row.querySelector('.ex-type').value;
+            const minutes = row.querySelector('.ex-minutes').value;
+            const rpe = row.querySelector('.ex-rpe').value;
+            if (type || minutes || rpe) {
+                exercises.push({ type, minutes, rpe });
+            }
+        });
+
+        const tags = [];
+        document.querySelectorAll('.tag-checkbox:checked').forEach(cb => tags.push(cb.value));
+
+        const record = {
+            date: date,
+            weight: document.getElementById('weight').value,
+            sleepHours: document.getElementById('sleepHours').value,
+            sleepQuality: document.getElementById('sleepQuality').value,
+            breakfast: document.getElementById('breakfast').value,
+            lunch: document.getElementById('lunch').value,
+            dinner: document.getElementById('dinner').value,
+            alcohol: document.getElementById('alcohol').value,
+            smokingCount: document.getElementById('smokingCount').value,
+            careMemo: document.getElementById('careMemo').value,
+            stepsCount: document.getElementById('stepsCount').value,
+            exercises: exercises,
+            mentalScore: document.getElementById('mentalScore').value,
+            energyLevel: document.getElementById('energyLevel').value,
+            tags: tags,
+            triggerFactor: document.getElementById('triggerFactor').value,
+            memoFact: document.getElementById('memoFact').value,
+            memoAbstraction: document.getElementById('memoAbstraction').value,
+            memoAction: document.getElementById('memoAction').value,
+            irregularStatus: document.getElementById('irregularStatus').value,
+            irregularSymptoms: document.getElementById('irregularSymptoms').value,
+            irregularSeverity: document.getElementById('irregularSeverity').value,
+            irregularAction: document.getElementById('irregularAction').value,
+            journal: document.getElementById('journalText').value
+        };
+
+        let records = JSON.parse(localStorage.getItem('physical_mental_records') || '[]');
+        records = records.filter(r => r.date !== date);
+        records.push(record);
+        records.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        localStorage.setItem('physical_mental_records', JSON.stringify(records));
+        alert('記録を保存しました！');
+        
+        cancelEdit();
+        loadRecords();
+    }
+
+    function loadRecords() {
+        const records = JSON.parse(localStorage.getItem('physical_mental_records') || '[]');
+        const container = document.getElementById('historyList');
+        container.innerHTML = '';
+
+        if (records.length === 0) {
+            container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-sub);">まだ記録がありません。</p>';
+            return;
+        }
+
+        [...records].reverse().forEach(r => {
+            const exSummary = r.exercises && r.exercises.length > 0 
+                ? r.exercises.map(e => `${e.type || '運動'}(${e.minutes || 0}分)`).join(', ') 
+                : '運動なし';
+
+            const div = document.createElement('div');
+            div.className = 'record-item';
+            div.innerHTML = `
+                <div class="record-info">
+                    <strong>${r.date}</strong> (体重: ${r.weight || '-'}kg / 歩数: ${r.stepsCount || '-'}歩)<br>
+                    <span style="color:var(--primary);">気分: ${r.mentalScore} | 運動: ${exSummary}</span><br>
+                    ${r.irregularStatus && r.irregularStatus !== '通常' ? `<span style="color:var(--danger);">[🚨 ${r.irregularStatus}]${r.irregularSymptoms}</span>` : ''}
+                    ${r.journal ? `<br><span style="color:var(--text-sub); font-size:0.75rem;">📝 ジャーナルあり</span>` : ''}
+                </div>
+                <div class="action-btns">
+                    <button class="edit-btn" onclick="editRecord('${r.date}')">編集</button>
+                    <button class="delete-btn" onclick="deleteRecord('${r.date}')">削除</button>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function editRecord(date) {
+        const records = JSON.parse(localStorage.getItem('physical_mental_records') || '[]');
+        const target = records.find(r => r.date === date);
+        if (!target) return;
+
+        document.getElementById('recordDate').value = target.date;
+        document.getElementById('weight').value = target.weight || '';
+        document.getElementById('sleepHours').value = target.sleepHours || '';
+        document.getElementById('sleepQuality').value = target.sleepQuality || '3';
+        document.getElementById('breakfast').value = target.breakfast || '';
+        document.getElementById('lunch').value = target.lunch || '';
+        document.getElementById('dinner').value = target.dinner || '';
+        document.getElementById('alcohol').value = target.alcohol || '無';
+        document.getElementById('smokingCount').value = target.smokingCount || 0;
+        document.getElementById('careMemo').value = target.careMemo || '';
+        document.getElementById('stepsCount').value = target.stepsCount || '';
+        document.getElementById('journalText').value = target.journal || '';
+
+        const container = document.getElementById('exerciseListContainer');
+        container.innerHTML = '';
+        if (target.exercises && target.exercises.length > 0) {
+            target.exercises.forEach(ex => {
+                addExerciseRow(ex.type, ex.minutes, ex.rpe);
+            });
+        } else {
+            addExerciseRow();
+        }
+
+        document.getElementById('mentalScore').value = target.mentalScore || '0';
+        document.getElementById('energyLevel').value = target.energyLevel || '普通';
+        
+        document.querySelectorAll('.tag-checkbox').forEach(cb => {
+            cb.checked = target.tags && target.tags.includes(cb.value);
+        });
+
+        document.getElementById('triggerFactor').value = target.triggerFactor || '特になし';
+        document.getElementById('memoFact').value = target.memoFact || '';
+        document.getElementById('memoAbstraction').value = target.memoAbstraction || '';
+        document.getElementById('memoAction').value = target.memoAction || '';
+        document.getElementById('irregularStatus').value = target.irregularStatus || '通常';
+        document.getElementById('irregularSymptoms').value = target.irregularSymptoms || '';
+        document.getElementById('irregularSeverity').value = target.irregularSeverity || '3';
+        document.getElementById('irregularAction').value = target.irregularAction || '';
+
+        document.getElementById('editingDateText').textContent = target.date;
+        document.getElementById('editModeBanner').classList.add('active');
+        document.getElementById('submitBtn').textContent = '変更を上書き保存する';
+
+        switchTab('input');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function cancelEdit() {
+        document.getElementById('dailyForm').reset();
+        document.getElementById('recordDate').value = getTodayJST();
+        document.getElementById('editModeBanner').classList.remove('active');
+        document.getElementById('submitBtn').textContent = '今日の記録を保存する';
+        
+        const container = document.getElementById('exerciseListContainer');
+        container.innerHTML = '';
+        addExerciseRow();
+    }
+
+    function deleteRecord(date) {
+        if (confirm(`${date} の記録を削除しますか？`)) {
+            let records = JSON.parse(localStorage.getItem('physical_mental_records') || '[]');
+            records = records.filter(r => r.date !== date);
+            localStorage.setItem('physical_mental_records', JSON.stringify(records));
+            loadRecords();
+        }
+    }
+
+    let myWeightChart = null;
+    function renderCharts() {
+        const records = JSON.parse(localStorage.getItem('physical_mental_records') || '[]');
+        const labels = records.map(r => r.date);
+        const weightData = records.map(r => r.weight ? parseFloat(r.weight) : null);
+
+        const ctx = document.getElementById('weightChart').getContext('2d');
+        if (myWeightChart) {
+            myWeightChart.destroy();
+        }
+
+        myWeightChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '体重 (kg)',
+                    data: weightData,
+                    borderColor: '#5c4033',
+                    backgroundColor: 'rgba(92, 64, 51, 0.08)',
+                    tension: 0.1,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: false }
+                }
+            }
+        });
+
+        const exerciseBox = document.getElementById('exerciseSummary');
+        if (records.length === 0) {
+            exerciseBox.innerHTML = 'データがありません。';
+        } else {
+            const todayStr = getTodayJST();
+            const sunStr = getSundayOfWeek(todayStr);
+            const sunDate = new Date(sunStr);
+            const satDate = new Date(sunDate);
+            satDate.setDate(satDate.getDate() + 6);
+            const satStr = satDate.toISOString().split('T')[0];
+
+            const weekRecords = records.filter(r => r.date >= sunStr && r.date <= satStr);
+            let totalMins = 0;
+            let totalCount = 0;
+            weekRecords.forEach(r => {
+                if (r.exercises && r.exercises.length > 0) {
+                    let hasEx = false;
+                    r.exercises.forEach(e => {
+                        totalMins += parseInt(e.minutes) || 0;
+                        if (e.type || parseInt(e.minutes) > 0) hasEx = true;
+                    });
+                    if (hasEx) totalCount++;
+                }
+            });
+
+            exerciseBox.innerHTML = `
+                <p style="font-size:0.75rem; color:var(--text-sub); margin-bottom:4px;">対象期間: ${sunStr} 〜 ${satStr}（日〜土）</p>
+                <p><strong>今週の総運動時間：</strong> ${totalMins} 分</p>
+                <p><strong>今週の運動実施日数：</strong> ${totalCount} 日</p>
+            `;
+        }
+
+        const mentalBox = document.getElementById('mentalPatternSummary');
+        if (records.length === 0) {
+            mentalBox.innerHTML = 'データがありません。';
+        } else {
+            let triggerCounts = {};
+            records.forEach(r => {
+                if (r.triggerFactor && r.triggerFactor !== '特になし') {
+                    triggerCounts[r.triggerFactor] = (triggerCounts[r.triggerFactor] || 0) + 1;
+                }
+            });
+
+            let triggerHtml = '<ul>';
+            for (let [trig, count] of Object.entries(triggerCounts)) {
+                triggerHtml += `<li>${trig}: ${count}回</li>`;
+            }
+            triggerHtml += '</ul>';
+
+            mentalBox.innerHTML = `
+                <h3>よく記録されるメンタル要因（トリガー）</h3>
+                ${Object.keys(triggerCounts).length > 0 ? triggerHtml : '<p>特筆すべき要因の偏りはまだありません。</p>'}
+            `;
+        }
+    }
+</script>
+
+</body>
+</html>
